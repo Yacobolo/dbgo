@@ -1,0 +1,176 @@
+package lineage
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Primary expression parsing: literals, column refs, function calls.
+//
+// Grammar:
+//
+//	primary       → literal | column_ref | func_call | paren_expr | case_expr | cast_expr | exists_expr
+//	literal       → NUMBER | STRING | TRUE | FALSE | NULL
+//	column_ref    → [table "."] column | [schema "." table "."] column
+//	func_call     → identifier "(" [DISTINCT] [expr_list | "*"] ")" [FILTER "(" WHERE expr ")"] [OVER window_spec]
+
+// parsePrimary parses primary expressions.
+func (p *Parser) parsePrimary() Expr {
+	switch p.token.Type {
+	case TOKEN_NUMBER:
+		lit := &Literal{Type: LiteralNumber, Value: p.token.Literal}
+		p.nextToken()
+		return lit
+
+	case TOKEN_STRING:
+		lit := &Literal{Type: LiteralString, Value: p.token.Literal}
+		p.nextToken()
+		return lit
+
+	case TOKEN_TRUE:
+		p.nextToken()
+		return &Literal{Type: LiteralBool, Value: "true"}
+
+	case TOKEN_FALSE:
+		p.nextToken()
+		return &Literal{Type: LiteralBool, Value: "false"}
+
+	case TOKEN_NULL:
+		p.nextToken()
+		return &Literal{Type: LiteralNull, Value: "null"}
+
+	case TOKEN_CASE:
+		return p.parseCaseExpr()
+
+	case TOKEN_CAST:
+		return p.parseCastExpr()
+
+	case TOKEN_NOT:
+		// EXISTS check
+		if p.checkPeek(TOKEN_IDENT) && strings.ToLower(p.peek.Literal) == "exists" {
+			p.nextToken() // consume NOT
+			return p.parseExistsExpr(true)
+		}
+		// Regular NOT expression
+		p.nextToken()
+		return &UnaryExpr{Op: "NOT", Expr: p.parsePrimary()}
+
+	case TOKEN_IDENT:
+		// Check for EXISTS
+		if strings.ToLower(p.token.Literal) == "exists" {
+			return p.parseExistsExpr(false)
+		}
+		return p.parseIdentifierExpr()
+
+	case TOKEN_LPAREN:
+		return p.parseParenExpr()
+
+	case TOKEN_STAR:
+		// SELECT * context
+		p.nextToken()
+		return &StarExpr{}
+
+	default:
+		p.addError(fmt.Sprintf("unexpected token in expression: %s", p.token.Type))
+		p.nextToken()
+		return nil
+	}
+}
+
+// parseIdentifierExpr parses an identifier which could be a column ref or function call.
+func (p *Parser) parseIdentifierExpr() Expr {
+	name := p.token.Literal
+	p.nextToken()
+
+	// Check if it's a function call
+	if p.check(TOKEN_LPAREN) {
+		return p.parseFuncCall(name)
+	}
+
+	// Qualified column reference: table.column or schema.table.column
+	if p.check(TOKEN_DOT) {
+		return p.parseQualifiedColumnRef(name)
+	}
+
+	// Simple column reference
+	return &ColumnRef{Column: name}
+}
+
+// parseQualifiedColumnRef parses a qualified column reference.
+func (p *Parser) parseQualifiedColumnRef(firstPart string) Expr {
+	parts := []string{firstPart}
+
+	for p.match(TOKEN_DOT) {
+		// Check for table.*
+		if p.check(TOKEN_STAR) {
+			p.nextToken()
+			return &StarExpr{Table: firstPart}
+		}
+
+		if p.check(TOKEN_IDENT) {
+			parts = append(parts, p.token.Literal)
+			p.nextToken()
+		}
+	}
+
+	// Build column reference
+	ref := &ColumnRef{}
+	switch len(parts) {
+	case 2:
+		ref.Table = parts[0]
+		ref.Column = parts[1]
+	case 3:
+		// schema.table.column - we'll use table.column for now
+		ref.Table = parts[1]
+		ref.Column = parts[2]
+	default:
+		ref.Column = parts[len(parts)-1]
+	}
+
+	return ref
+}
+
+// parseFuncCall parses a function call.
+func (p *Parser) parseFuncCall(name string) Expr {
+	fn := &FuncCall{Name: strings.ToUpper(name)}
+
+	p.expect(TOKEN_LPAREN)
+
+	// Handle COUNT(*) or other aggregate(*)
+	if p.check(TOKEN_STAR) {
+		fn.Star = true
+		p.nextToken()
+	} else if !p.check(TOKEN_RPAREN) {
+		// Check for DISTINCT
+		if p.match(TOKEN_DISTINCT) {
+			fn.Distinct = true
+		}
+
+		// Parse arguments
+		for {
+			arg := p.parseExpression()
+			fn.Args = append(fn.Args, arg)
+
+			if !p.match(TOKEN_COMMA) {
+				break
+			}
+		}
+	}
+
+	p.expect(TOKEN_RPAREN)
+
+	// FILTER clause (for aggregates)
+	if p.match(TOKEN_FILTER) {
+		p.expect(TOKEN_LPAREN)
+		p.expect(TOKEN_WHERE)
+		fn.Filter = p.parseExpression()
+		p.expect(TOKEN_RPAREN)
+	}
+
+	// OVER clause (window function)
+	if p.match(TOKEN_OVER) {
+		fn.Window = p.parseWindowSpec()
+	}
+
+	return fn
+}

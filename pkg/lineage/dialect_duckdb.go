@@ -1,10 +1,9 @@
 package lineage
 
-// This file contains dialect definitions.
-// Currently only DuckDB is supported, but the system is designed for extensibility.
+// DuckDB dialect definition.
+// For additional dialects, create new files like dialect_snowflake.go, dialect_bigquery.go, etc.
 
 func init() {
-	// Register built-in dialects
 	RegisterDialect(DuckDB)
 }
 

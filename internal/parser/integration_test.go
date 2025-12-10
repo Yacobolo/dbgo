@@ -65,8 +65,10 @@ func TestIntegration_ScanTestDataset(t *testing.T) {
 		if m.UniqueKey != "order_id" {
 			t.Errorf("order_facts unique_key = %q, expected 'order_id'", m.UniqueKey)
 		}
-		if len(m.Conditionals) != 1 {
-			t.Errorf("order_facts conditionals = %d, expected 1", len(m.Conditionals))
+		// Note: We no longer use #if conditionals - incremental logic is handled by engine
+		// based on unique_key and materialized type
+		if !m.HasFrontmatter {
+			t.Error("order_facts should have frontmatter")
 		}
 	}
 

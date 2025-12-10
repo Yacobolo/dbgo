@@ -339,6 +339,278 @@ func TestSQLiteStore_ListModels(t *testing.T) {
 	}
 }
 
+// --- Model frontmatter fields tests ---
+
+func TestSQLiteStore_RegisterModel_WithFrontmatterFields(t *testing.T) {
+	store := setupTestStore(t)
+	defer store.Close()
+
+	model := &Model{
+		Path:         "models.staging.stg_users",
+		Name:         "stg_users",
+		Materialized: "incremental",
+		UniqueKey:    "user_id",
+		ContentHash:  "abc123",
+		Owner:        "data-team",
+		Schema:       "analytics",
+		Tags:         []string{"pii", "daily"},
+		Tests: []TestConfig{
+			{Unique: []string{"user_id"}},
+			{NotNull: []string{"user_id", "email"}},
+		},
+		Meta: map[string]any{
+			"priority": "high",
+			"sla":      24,
+		},
+	}
+
+	err := store.RegisterModel(model)
+	if err != nil {
+		t.Fatalf("failed to register model: %v", err)
+	}
+
+	// Retrieve and verify all fields
+	retrieved, err := store.GetModelByPath("models.staging.stg_users")
+	if err != nil {
+		t.Fatalf("failed to get model: %v", err)
+	}
+
+	if retrieved.Owner != "data-team" {
+		t.Errorf("expected owner 'data-team', got %q", retrieved.Owner)
+	}
+	if retrieved.Schema != "analytics" {
+		t.Errorf("expected schema 'analytics', got %q", retrieved.Schema)
+	}
+	if len(retrieved.Tags) != 2 || retrieved.Tags[0] != "pii" || retrieved.Tags[1] != "daily" {
+		t.Errorf("expected tags [pii, daily], got %v", retrieved.Tags)
+	}
+	if len(retrieved.Tests) != 2 {
+		t.Errorf("expected 2 tests, got %d", len(retrieved.Tests))
+	}
+	if retrieved.Tests[0].Unique[0] != "user_id" {
+		t.Errorf("expected first test unique ['user_id'], got %v", retrieved.Tests[0].Unique)
+	}
+	if retrieved.Meta["priority"] != "high" {
+		t.Errorf("expected meta.priority 'high', got %v", retrieved.Meta["priority"])
+	}
+	// JSON unmarshals numbers as float64
+	if sla, ok := retrieved.Meta["sla"].(float64); !ok || sla != 24 {
+		t.Errorf("expected meta.sla 24, got %v", retrieved.Meta["sla"])
+	}
+}
+
+func TestSQLiteStore_RegisterModel_WithEmptyOptionalFields(t *testing.T) {
+	store := setupTestStore(t)
+	defer store.Close()
+
+	model := &Model{
+		Path:         "models.simple",
+		Name:         "simple",
+		Materialized: "table",
+		ContentHash:  "hash123",
+		// All optional fields empty/nil
+	}
+
+	err := store.RegisterModel(model)
+	if err != nil {
+		t.Fatalf("failed to register model: %v", err)
+	}
+
+	retrieved, err := store.GetModelByPath("models.simple")
+	if err != nil {
+		t.Fatalf("failed to get model: %v", err)
+	}
+
+	if retrieved.Owner != "" {
+		t.Errorf("expected empty owner, got %q", retrieved.Owner)
+	}
+	if retrieved.Schema != "" {
+		t.Errorf("expected empty schema, got %q", retrieved.Schema)
+	}
+	if len(retrieved.Tags) != 0 {
+		t.Errorf("expected empty tags, got %v", retrieved.Tags)
+	}
+	if len(retrieved.Tests) != 0 {
+		t.Errorf("expected empty tests, got %v", retrieved.Tests)
+	}
+	if len(retrieved.Meta) != 0 {
+		t.Errorf("expected empty meta, got %v", retrieved.Meta)
+	}
+}
+
+func TestSQLiteStore_RegisterModel_UpdateFrontmatterFields(t *testing.T) {
+	store := setupTestStore(t)
+	defer store.Close()
+
+	// Register initial model
+	model := &Model{
+		Path:         "models.update_test",
+		Name:         "update_test",
+		Materialized: "table",
+		ContentHash:  "hash1",
+		Owner:        "team-a",
+		Tags:         []string{"initial"},
+	}
+	if err := store.RegisterModel(model); err != nil {
+		t.Fatalf("failed to register model: %v", err)
+	}
+
+	// Update the model with new frontmatter fields
+	model.ContentHash = "hash2"
+	model.Owner = "team-b"
+	model.Schema = "new_schema"
+	model.Tags = []string{"updated", "v2"}
+	model.Tests = []TestConfig{{NotNull: []string{"id"}}}
+	model.Meta = map[string]any{"version": 2}
+
+	if err := store.RegisterModel(model); err != nil {
+		t.Fatalf("failed to update model: %v", err)
+	}
+
+	retrieved, err := store.GetModelByPath("models.update_test")
+	if err != nil {
+		t.Fatalf("failed to get model: %v", err)
+	}
+
+	if retrieved.Owner != "team-b" {
+		t.Errorf("expected owner 'team-b', got %q", retrieved.Owner)
+	}
+	if retrieved.Schema != "new_schema" {
+		t.Errorf("expected schema 'new_schema', got %q", retrieved.Schema)
+	}
+	if len(retrieved.Tags) != 2 || retrieved.Tags[0] != "updated" {
+		t.Errorf("expected tags [updated, v2], got %v", retrieved.Tags)
+	}
+	if len(retrieved.Tests) != 1 {
+		t.Errorf("expected 1 test, got %d", len(retrieved.Tests))
+	}
+	// JSON unmarshals numbers as float64
+	if version, ok := retrieved.Meta["version"].(float64); !ok || version != 2 {
+		t.Errorf("expected meta.version 2, got %v", retrieved.Meta["version"])
+	}
+}
+
+func TestSQLiteStore_GetModelByID_WithFrontmatterFields(t *testing.T) {
+	store := setupTestStore(t)
+	defer store.Close()
+
+	model := &Model{
+		Path:         "models.get_by_id_test",
+		Name:         "get_by_id_test",
+		Materialized: "view",
+		ContentHash:  "hash123",
+		Owner:        "analytics",
+		Schema:       "reporting",
+		Tags:         []string{"finance"},
+		Meta:         map[string]any{"department": "finance"},
+	}
+
+	if err := store.RegisterModel(model); err != nil {
+		t.Fatalf("failed to register model: %v", err)
+	}
+
+	retrieved, err := store.GetModelByID(model.ID)
+	if err != nil {
+		t.Fatalf("failed to get model by ID: %v", err)
+	}
+
+	if retrieved.Owner != "analytics" {
+		t.Errorf("expected owner 'analytics', got %q", retrieved.Owner)
+	}
+	if retrieved.Schema != "reporting" {
+		t.Errorf("expected schema 'reporting', got %q", retrieved.Schema)
+	}
+	if len(retrieved.Tags) != 1 || retrieved.Tags[0] != "finance" {
+		t.Errorf("expected tags [finance], got %v", retrieved.Tags)
+	}
+}
+
+func TestSQLiteStore_ListModels_WithFrontmatterFields(t *testing.T) {
+	store := setupTestStore(t)
+	defer store.Close()
+
+	models := []*Model{
+		{
+			Path: "models.list_a", Name: "list_a", Materialized: "table", ContentHash: "1",
+			Owner: "team-a", Tags: []string{"tag-a"},
+		},
+		{
+			Path: "models.list_b", Name: "list_b", Materialized: "table", ContentHash: "2",
+			Owner: "team-b", Tags: []string{"tag-b"},
+		},
+	}
+
+	for _, m := range models {
+		if err := store.RegisterModel(m); err != nil {
+			t.Fatalf("failed to register model: %v", err)
+		}
+	}
+
+	list, err := store.ListModels()
+	if err != nil {
+		t.Fatalf("failed to list models: %v", err)
+	}
+
+	if len(list) != 2 {
+		t.Fatalf("expected 2 models, got %d", len(list))
+	}
+
+	// Check first model
+	if list[0].Owner != "team-a" {
+		t.Errorf("expected owner 'team-a', got %q", list[0].Owner)
+	}
+	if len(list[0].Tags) != 1 || list[0].Tags[0] != "tag-a" {
+		t.Errorf("expected tags [tag-a], got %v", list[0].Tags)
+	}
+
+	// Check second model
+	if list[1].Owner != "team-b" {
+		t.Errorf("expected owner 'team-b', got %q", list[1].Owner)
+	}
+}
+
+func TestSQLiteStore_RegisterModel_WithAcceptedValues(t *testing.T) {
+	store := setupTestStore(t)
+	defer store.Close()
+
+	model := &Model{
+		Path:         "models.accepted_values_test",
+		Name:         "accepted_values_test",
+		Materialized: "table",
+		ContentHash:  "hash",
+		Tests: []TestConfig{
+			{
+				AcceptedValues: &AcceptedValuesConfig{
+					Column: "status",
+					Values: []string{"active", "inactive", "pending"},
+				},
+			},
+		},
+	}
+
+	if err := store.RegisterModel(model); err != nil {
+		t.Fatalf("failed to register model: %v", err)
+	}
+
+	retrieved, err := store.GetModelByPath("models.accepted_values_test")
+	if err != nil {
+		t.Fatalf("failed to get model: %v", err)
+	}
+
+	if len(retrieved.Tests) != 1 {
+		t.Fatalf("expected 1 test, got %d", len(retrieved.Tests))
+	}
+	if retrieved.Tests[0].AcceptedValues == nil {
+		t.Fatal("expected AcceptedValues to not be nil")
+	}
+	if retrieved.Tests[0].AcceptedValues.Column != "status" {
+		t.Errorf("expected column 'status', got %q", retrieved.Tests[0].AcceptedValues.Column)
+	}
+	if len(retrieved.Tests[0].AcceptedValues.Values) != 3 {
+		t.Errorf("expected 3 values, got %d", len(retrieved.Tests[0].AcceptedValues.Values))
+	}
+}
+
 // --- Model run tests ---
 
 func TestSQLiteStore_RecordModelRun(t *testing.T) {

@@ -1,4 +1,17 @@
--- @config(materialized='table')
+/*---
+name: customer_summary
+materialized: table
+owner: analytics
+schema: marts
+tags:
+  - marts
+  - customers
+  - metrics
+tests:
+  - unique: [customer_id]
+  - not_null: [customer_id, customer_name]
+---*/
+
 -- Customer summary with order metrics
 
 SELECT 

@@ -3,7 +3,7 @@ docs-site/
 .dbgo-docs/
 
 # Binaries
-dbgo
+*.dbgo
 *.exe
 *.exe~
 *.dll

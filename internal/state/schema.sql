@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS models (
     materialized TEXT NOT NULL DEFAULT 'table',
     unique_key TEXT,
     content_hash TEXT NOT NULL,
+    -- New fields from frontmatter
+    owner TEXT,
+    schema_name TEXT,
+    tags TEXT,           -- JSON array: ["finance", "revenue"]
+    tests TEXT,          -- JSON array of test configs
+    meta TEXT,           -- JSON object for extensions
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     

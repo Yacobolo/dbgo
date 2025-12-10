@@ -3,6 +3,7 @@ package state
 import (
 	"database/sql"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -209,6 +210,20 @@ func (s *SQLiteStore) RegisterModel(model *Model) error {
 		model.Materialized = "table"
 	}
 
+	// Serialize complex fields to JSON
+	tagsJSON, err := serializeJSON(model.Tags)
+	if err != nil {
+		return fmt.Errorf("failed to serialize tags: %w", err)
+	}
+	testsJSON, err := serializeJSON(model.Tests)
+	if err != nil {
+		return fmt.Errorf("failed to serialize tests: %w", err)
+	}
+	metaJSON, err := serializeJSON(model.Meta)
+	if err != nil {
+		return fmt.Errorf("failed to serialize meta: %w", err)
+	}
+
 	now := time.Now().UTC()
 
 	// Check if model already exists by path
@@ -224,8 +239,12 @@ func (s *SQLiteStore) RegisterModel(model *Model) error {
 		model.UpdatedAt = now
 
 		_, err := s.db.Exec(
-			`UPDATE models SET name = ?, materialized = ?, unique_key = ?, content_hash = ?, updated_at = ? WHERE id = ?`,
-			model.Name, model.Materialized, model.UniqueKey, model.ContentHash, model.UpdatedAt, model.ID,
+			`UPDATE models SET name = ?, materialized = ?, unique_key = ?, content_hash = ?, 
+			 owner = ?, schema_name = ?, tags = ?, tests = ?, meta = ?, updated_at = ? 
+			 WHERE id = ?`,
+			model.Name, model.Materialized, model.UniqueKey, model.ContentHash,
+			nullString(model.Owner), nullString(model.Schema), tagsJSON, testsJSON, metaJSON,
+			model.UpdatedAt, model.ID,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to update model: %w", err)
@@ -239,9 +258,12 @@ func (s *SQLiteStore) RegisterModel(model *Model) error {
 		model.UpdatedAt = now
 
 		_, err := s.db.Exec(
-			`INSERT INTO models (id, path, name, materialized, unique_key, content_hash, created_at, updated_at) 
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			model.ID, model.Path, model.Name, model.Materialized, model.UniqueKey, model.ContentHash, model.CreatedAt, model.UpdatedAt,
+			`INSERT INTO models (id, path, name, materialized, unique_key, content_hash, 
+			 owner, schema_name, tags, tests, meta, created_at, updated_at) 
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			model.ID, model.Path, model.Name, model.Materialized, model.UniqueKey, model.ContentHash,
+			nullString(model.Owner), nullString(model.Schema), tagsJSON, testsJSON, metaJSON,
+			model.CreatedAt, model.UpdatedAt,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert model: %w", err)
@@ -251,6 +273,43 @@ func (s *SQLiteStore) RegisterModel(model *Model) error {
 	return nil
 }
 
+// nullString returns a sql.NullString for optional string fields.
+func nullString(s string) sql.NullString {
+	if s == "" {
+		return sql.NullString{Valid: false}
+	}
+	return sql.NullString{String: s, Valid: true}
+}
+
+// serializeJSON serializes a value to JSON, returning nil for empty values.
+func serializeJSON(v any) (sql.NullString, error) {
+	if v == nil {
+		return sql.NullString{Valid: false}, nil
+	}
+
+	// Check for empty slices and maps
+	switch val := v.(type) {
+	case []string:
+		if len(val) == 0 {
+			return sql.NullString{Valid: false}, nil
+		}
+	case []TestConfig:
+		if len(val) == 0 {
+			return sql.NullString{Valid: false}, nil
+		}
+	case map[string]any:
+		if len(val) == 0 {
+			return sql.NullString{Valid: false}, nil
+		}
+	}
+
+	data, err := json.Marshal(v)
+	if err != nil {
+		return sql.NullString{}, err
+	}
+	return sql.NullString{String: string(data), Valid: true}, nil
+}
+
 // GetModelByID retrieves a model by ID.
 func (s *SQLiteStore) GetModelByID(id string) (*Model, error) {
 	if s.db == nil {
@@ -258,13 +317,15 @@ func (s *SQLiteStore) GetModelByID(id string) (*Model, error) {
 	}
 
 	model := &Model{}
-	var uniqueKey sql.NullString
+	var uniqueKey, owner, schema, tagsJSON, testsJSON, metaJSON sql.NullString
 
 	err := s.db.QueryRow(
-		`SELECT id, path, name, materialized, unique_key, content_hash, created_at, updated_at 
+		`SELECT id, path, name, materialized, unique_key, content_hash, 
+		 owner, schema_name, tags, tests, meta, created_at, updated_at 
 		 FROM models WHERE id = ?`,
 		id,
-	).Scan(&model.ID, &model.Path, &model.Name, &model.Materialized, &uniqueKey, &model.ContentHash, &model.CreatedAt, &model.UpdatedAt)
+	).Scan(&model.ID, &model.Path, &model.Name, &model.Materialized, &uniqueKey, &model.ContentHash,
+		&owner, &schema, &tagsJSON, &testsJSON, &metaJSON, &model.CreatedAt, &model.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("model not found: %s", id)
@@ -273,11 +334,37 @@ func (s *SQLiteStore) GetModelByID(id string) (*Model, error) {
 		return nil, fmt.Errorf("failed to get model: %w", err)
 	}
 
+	// Deserialize optional fields
 	if uniqueKey.Valid {
 		model.UniqueKey = uniqueKey.String
 	}
+	if owner.Valid {
+		model.Owner = owner.String
+	}
+	if schema.Valid {
+		model.Schema = schema.String
+	}
+
+	// Deserialize JSON fields
+	if err := deserializeJSON(tagsJSON, &model.Tags); err != nil {
+		return nil, fmt.Errorf("failed to deserialize tags: %w", err)
+	}
+	if err := deserializeJSON(testsJSON, &model.Tests); err != nil {
+		return nil, fmt.Errorf("failed to deserialize tests: %w", err)
+	}
+	if err := deserializeJSON(metaJSON, &model.Meta); err != nil {
+		return nil, fmt.Errorf("failed to deserialize meta: %w", err)
+	}
 
 	return model, nil
+}
+
+// deserializeJSON deserializes a JSON string into a target value.
+func deserializeJSON(data sql.NullString, target any) error {
+	if !data.Valid || data.String == "" {
+		return nil
+	}
+	return json.Unmarshal([]byte(data.String), target)
 }
 
 // GetModelByPath retrieves a model by its path.
@@ -287,13 +374,15 @@ func (s *SQLiteStore) GetModelByPath(path string) (*Model, error) {
 	}
 
 	model := &Model{}
-	var uniqueKey sql.NullString
+	var uniqueKey, owner, schema, tagsJSON, testsJSON, metaJSON sql.NullString
 
 	err := s.db.QueryRow(
-		`SELECT id, path, name, materialized, unique_key, content_hash, created_at, updated_at 
+		`SELECT id, path, name, materialized, unique_key, content_hash, 
+		 owner, schema_name, tags, tests, meta, created_at, updated_at 
 		 FROM models WHERE path = ?`,
 		path,
-	).Scan(&model.ID, &model.Path, &model.Name, &model.Materialized, &uniqueKey, &model.ContentHash, &model.CreatedAt, &model.UpdatedAt)
+	).Scan(&model.ID, &model.Path, &model.Name, &model.Materialized, &uniqueKey, &model.ContentHash,
+		&owner, &schema, &tagsJSON, &testsJSON, &metaJSON, &model.CreatedAt, &model.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil // Not found, return nil without error
@@ -302,8 +391,26 @@ func (s *SQLiteStore) GetModelByPath(path string) (*Model, error) {
 		return nil, fmt.Errorf("failed to get model: %w", err)
 	}
 
+	// Deserialize optional fields
 	if uniqueKey.Valid {
 		model.UniqueKey = uniqueKey.String
+	}
+	if owner.Valid {
+		model.Owner = owner.String
+	}
+	if schema.Valid {
+		model.Schema = schema.String
+	}
+
+	// Deserialize JSON fields
+	if err := deserializeJSON(tagsJSON, &model.Tags); err != nil {
+		return nil, fmt.Errorf("failed to deserialize tags: %w", err)
+	}
+	if err := deserializeJSON(testsJSON, &model.Tests); err != nil {
+		return nil, fmt.Errorf("failed to deserialize tests: %w", err)
+	}
+	if err := deserializeJSON(metaJSON, &model.Meta); err != nil {
+		return nil, fmt.Errorf("failed to deserialize meta: %w", err)
 	}
 
 	return model, nil
@@ -338,7 +445,9 @@ func (s *SQLiteStore) ListModels() ([]*Model, error) {
 	}
 
 	rows, err := s.db.Query(
-		`SELECT id, path, name, materialized, unique_key, content_hash, created_at, updated_at FROM models ORDER BY path`,
+		`SELECT id, path, name, materialized, unique_key, content_hash, 
+		 owner, schema_name, tags, tests, meta, created_at, updated_at 
+		 FROM models ORDER BY path`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list models: %w", err)
@@ -348,16 +457,36 @@ func (s *SQLiteStore) ListModels() ([]*Model, error) {
 	var models []*Model
 	for rows.Next() {
 		model := &Model{}
-		var uniqueKey sql.NullString
+		var uniqueKey, owner, schema, tagsJSON, testsJSON, metaJSON sql.NullString
 
-		err := rows.Scan(&model.ID, &model.Path, &model.Name, &model.Materialized, &uniqueKey, &model.ContentHash, &model.CreatedAt, &model.UpdatedAt)
+		err := rows.Scan(&model.ID, &model.Path, &model.Name, &model.Materialized, &uniqueKey, &model.ContentHash,
+			&owner, &schema, &tagsJSON, &testsJSON, &metaJSON, &model.CreatedAt, &model.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan model: %w", err)
 		}
 
+		// Deserialize optional fields
 		if uniqueKey.Valid {
 			model.UniqueKey = uniqueKey.String
 		}
+		if owner.Valid {
+			model.Owner = owner.String
+		}
+		if schema.Valid {
+			model.Schema = schema.String
+		}
+
+		// Deserialize JSON fields
+		if err := deserializeJSON(tagsJSON, &model.Tags); err != nil {
+			return nil, fmt.Errorf("failed to deserialize tags: %w", err)
+		}
+		if err := deserializeJSON(testsJSON, &model.Tests); err != nil {
+			return nil, fmt.Errorf("failed to deserialize tests: %w", err)
+		}
+		if err := deserializeJSON(metaJSON, &model.Meta); err != nil {
+			return nil, fmt.Errorf("failed to deserialize meta: %w", err)
+		}
+
 		models = append(models, model)
 	}
 

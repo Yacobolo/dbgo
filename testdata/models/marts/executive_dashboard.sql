@@ -1,4 +1,14 @@
--- @config(materialized='view')
+/*---
+name: executive_dashboard
+materialized: view
+owner: executive
+schema: marts
+tags:
+  - marts
+  - dashboard
+  - executive
+---*/
+
 -- Executive dashboard summary combining customer and product metrics
 
 WITH customer_metrics AS (

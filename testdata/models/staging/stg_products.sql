@@ -1,4 +1,15 @@
--- @config(materialized='table')
+/*---
+name: stg_products
+materialized: table
+owner: data-platform
+tags:
+  - staging
+  - products
+tests:
+  - unique: [product_id]
+  - not_null: [product_id, product_name]
+---*/
+
 -- Staging model for products
 -- Cleans and standardizes raw product data
 

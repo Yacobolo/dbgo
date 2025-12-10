@@ -1,4 +1,7 @@
-linage table and column?
 progressive disclosure tests?
+table-test
 dialect specific test
-macros
+marco external packages main.star
+macro package management: packages.yaml packages-lock.yaml
+profiles.yml
+dialect specific config

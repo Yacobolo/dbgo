@@ -13,7 +13,7 @@ import (
 	"github.com/user/dbgo/pkg/lineage"
 )
 
-// ModelConfig holds configuration extracted from SQL model pragmas.
+// ModelConfig holds configuration extracted from SQL model pragmas and frontmatter.
 type ModelConfig struct {
 	// Path is the model path (e.g., "staging.customers")
 	Path string
@@ -25,6 +25,16 @@ type ModelConfig struct {
 	Materialized string
 	// UniqueKey for incremental models
 	UniqueKey string
+	// Owner is the team/person responsible for this model
+	Owner string
+	// Schema is the database schema for this model
+	Schema string
+	// Tags are metadata labels for filtering/organizing models
+	Tags []string
+	// Meta contains custom extension fields
+	Meta map[string]any
+	// Tests contains test configurations from frontmatter
+	Tests []TestConfig
 	// Imports are explicit model dependencies from @import pragmas (legacy)
 	Imports []string
 	// Sources are all table names referenced in the SQL (auto-detected via lineage parser)
@@ -32,12 +42,14 @@ type ModelConfig struct {
 	Sources []string
 	// Columns contains column-level lineage information
 	Columns []ColumnInfo
-	// SQL is the raw SQL content (excluding pragmas)
+	// SQL is the raw SQL content (excluding pragmas/frontmatter)
 	SQL string
-	// RawContent is the full file content including pragmas
+	// RawContent is the full file content including pragmas/frontmatter
 	RawContent string
 	// Conditionals are #if directives for environment-specific SQL
 	Conditionals []Conditional
+	// HasFrontmatter indicates if YAML frontmatter was found
+	HasFrontmatter bool
 }
 
 // Conditional represents an #if directive block.
@@ -104,21 +116,61 @@ func (p *Parser) ParseContent(filePath string, content string) (*ModelConfig, er
 		Materialized: "table", // default
 		Imports:      []string{},
 		Conditionals: []Conditional{},
+		Tags:         []string{},
+		Meta:         make(map[string]any),
 	}
 
 	// Derive name and path from file path
 	config.Name = strings.TrimSuffix(filepath.Base(filePath), ".sql")
 	config.Path = p.filePathToModelPath(filePath)
 
+	// Try to extract YAML frontmatter first (new preferred format)
+	frontmatter, err := ExtractFrontmatter(content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse frontmatter: %w", err)
+	}
+
+	// Use SQL after frontmatter extraction
+	sqlContent := frontmatter.SQL
+	config.HasFrontmatter = frontmatter.HasYAML
+
+	// Apply frontmatter config if present
+	if frontmatter.HasYAML && frontmatter.Config != nil {
+		fc := frontmatter.Config
+		if fc.Name != "" {
+			config.Name = fc.Name
+		}
+		if fc.Materialized != "" {
+			config.Materialized = fc.Materialized
+		}
+		if fc.UniqueKey != "" {
+			config.UniqueKey = fc.UniqueKey
+		}
+		config.Owner = fc.Owner
+		if fc.Schema != "" {
+			config.Schema = fc.Schema
+		}
+		if len(fc.Tags) > 0 {
+			config.Tags = fc.Tags
+		}
+		if fc.Meta != nil {
+			config.Meta = fc.Meta
+		}
+		if len(fc.Tests) > 0 {
+			config.Tests = fc.Tests
+		}
+	}
+
+	// Continue parsing legacy pragmas from the SQL content
 	var sqlLines []string
 	var inConditional bool
 	var currentConditional Conditional
 
-	scanner := bufio.NewScanner(strings.NewReader(content))
+	scanner := bufio.NewScanner(strings.NewReader(sqlContent))
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Check for @config pragma
+		// Check for @config pragma (legacy, overrides frontmatter)
 		if matches := configPattern.FindStringSubmatch(line); len(matches) > 1 {
 			p.parseConfig(matches[1], config)
 			continue

@@ -14,20 +14,27 @@ import (
 
 	"github.com/user/dbgo/internal/adapter"
 	"github.com/user/dbgo/internal/dag"
+	"github.com/user/dbgo/internal/macro"
 	"github.com/user/dbgo/internal/parser"
 	"github.com/user/dbgo/internal/registry"
+	starctx "github.com/user/dbgo/internal/starlark"
 	"github.com/user/dbgo/internal/state"
+	"github.com/user/dbgo/internal/template"
 )
 
 // Engine orchestrates the execution of SQL models.
 type Engine struct {
-	db        adapter.Adapter
-	store     state.StateStore
-	modelsDir string
-	seedsDir  string
-	graph     *dag.Graph
-	models    map[string]*parser.ModelConfig
-	registry  *registry.ModelRegistry
+	db            adapter.Adapter
+	store         state.StateStore
+	modelsDir     string
+	seedsDir      string
+	macrosDir     string
+	environment   string
+	target        *starctx.TargetInfo
+	graph         *dag.Graph
+	models        map[string]*parser.ModelConfig
+	registry      *registry.ModelRegistry
+	macroRegistry *macro.Registry
 }
 
 // Config holds engine configuration.
@@ -36,10 +43,16 @@ type Config struct {
 	ModelsDir string
 	// SeedsDir is the path to the seeds (raw data) directory
 	SeedsDir string
+	// MacrosDir is the path to the macros directory (optional)
+	MacrosDir string
 	// DatabasePath is the path to the DuckDB database (empty for in-memory)
 	DatabasePath string
 	// StatePath is the path to the SQLite state database
 	StatePath string
+	// Environment is the current environment (dev, staging, prod)
+	Environment string
+	// Target contains adapter/database configuration
+	Target *starctx.TargetInfo
 }
 
 // New creates a new engine with the given configuration.
@@ -65,14 +78,53 @@ func New(cfg Config) (*Engine, error) {
 		return nil, fmt.Errorf("failed to initialize state schema: %w", err)
 	}
 
+	// Load macros if macros directory is specified
+	var macroRegistry *macro.Registry
+	if cfg.MacrosDir != "" {
+		var err error
+		macroRegistry, err = macro.LoadAndRegister(cfg.MacrosDir)
+		if err != nil {
+			// Log warning but don't fail - macros are optional
+			// In a real implementation, we might want to check if directory exists first
+			if !os.IsNotExist(err) {
+				db.Close()
+				store.Close()
+				return nil, fmt.Errorf("failed to load macros: %w", err)
+			}
+			macroRegistry = macro.NewRegistry()
+		}
+	} else {
+		macroRegistry = macro.NewRegistry()
+	}
+
+	// Set default environment
+	env := cfg.Environment
+	if env == "" {
+		env = "dev"
+	}
+
+	// Set default target
+	target := cfg.Target
+	if target == nil {
+		target = &starctx.TargetInfo{
+			Type:     "duckdb",
+			Schema:   "main",
+			Database: "",
+		}
+	}
+
 	return &Engine{
-		db:        db,
-		store:     store,
-		modelsDir: cfg.ModelsDir,
-		seedsDir:  cfg.SeedsDir,
-		graph:     dag.NewGraph(),
-		models:    make(map[string]*parser.ModelConfig),
-		registry:  registry.NewModelRegistry(),
+		db:            db,
+		store:         store,
+		modelsDir:     cfg.ModelsDir,
+		seedsDir:      cfg.SeedsDir,
+		macrosDir:     cfg.MacrosDir,
+		environment:   env,
+		target:        target,
+		graph:         dag.NewGraph(),
+		models:        make(map[string]*parser.ModelConfig),
+		registry:      registry.NewModelRegistry(),
+		macroRegistry: macroRegistry,
 	}, nil
 }
 
@@ -391,8 +443,24 @@ func (e *Engine) executeModel(ctx context.Context, m *parser.ModelConfig, model 
 	}
 }
 
-// buildSQL prepares the SQL for execution, replacing placeholders.
+// buildSQL prepares the SQL for execution using template rendering.
 func (e *Engine) buildSQL(m *parser.ModelConfig, model *state.Model) string {
+	// Create execution context for this model
+	ctx := e.createExecutionContext(m)
+
+	// Render the template
+	rendered, err := template.RenderString(m.SQL, m.FilePath, ctx)
+	if err != nil {
+		// Fallback to legacy string replacement if template fails
+		// This provides backward compatibility
+		return e.buildSQLLegacy(m, model)
+	}
+
+	return rendered
+}
+
+// buildSQLLegacy provides backward compatibility with simple string replacement.
+func (e *Engine) buildSQLLegacy(m *parser.ModelConfig, model *state.Model) string {
 	sql := m.SQL
 
 	// Replace {{ this }} with the model's table name
@@ -406,6 +474,51 @@ func (e *Engine) buildSQL(m *parser.ModelConfig, model *state.Model) string {
 	}
 
 	return sql
+}
+
+// createExecutionContext builds a Starlark execution context for template rendering.
+func (e *Engine) createExecutionContext(m *parser.ModelConfig) *starctx.ExecutionContext {
+	// Build config dict from model config
+	config := starctx.BuildConfigDict(
+		m.Name,
+		m.Materialized,
+		m.UniqueKey,
+		m.Owner,
+		m.Schema,
+		m.Tags,
+		m.Meta,
+	)
+
+	// Build this info
+	thisInfo := &starctx.ThisInfo{
+		Name:   m.Name,
+		Schema: e.getModelSchema(m),
+	}
+
+	// Create context with macros
+	ctx := starctx.NewContext(
+		config,
+		e.environment,
+		e.target,
+		thisInfo,
+		starctx.WithMacroRegistry(e.macroRegistry),
+	)
+
+	return ctx
+}
+
+// getModelSchema extracts the schema from a model path.
+func (e *Engine) getModelSchema(m *parser.ModelConfig) string {
+	// If schema is explicitly set, use it
+	if m.Schema != "" {
+		return m.Schema
+	}
+	// Otherwise derive from path (e.g., "staging.customers" -> "staging")
+	parts := strings.Split(m.Path, ".")
+	if len(parts) > 1 {
+		return parts[0]
+	}
+	return e.target.Schema // Default to target schema
 }
 
 // executeTable creates or replaces a table.

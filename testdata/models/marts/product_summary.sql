@@ -1,4 +1,17 @@
--- @config(materialized='table')
+/*---
+name: product_summary
+materialized: table
+owner: analytics
+schema: marts
+tags:
+  - marts
+  - products
+  - metrics
+tests:
+  - unique: [product_id]
+  - not_null: [product_id, product_name]
+---*/
+
 -- Product sales metrics
 
 SELECT 

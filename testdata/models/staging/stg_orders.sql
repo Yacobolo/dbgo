@@ -1,4 +1,18 @@
--- @config(materialized='table')
+/*---
+name: stg_orders
+materialized: table
+owner: data-platform
+tags:
+  - staging
+  - orders
+tests:
+  - unique: [order_id]
+  - not_null: [order_id, customer_id, order_date]
+  - accepted_values:
+      column: status
+      values: [pending, completed, shipped]
+---*/
+
 -- Staging model for orders
 -- Cleans and standardizes raw order data
 

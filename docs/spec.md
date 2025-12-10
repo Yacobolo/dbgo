@@ -2,9 +2,11 @@
 
 - **Language:** Go (Single binary transpiler).
 - **State:** SQLite (Stores project graph and metadata).
-- **Parsing Strategy:** **Two-Pass System**.
-  1.  **Fast Pass:** Reads only the header (YAML) for instant graph building.
-  2.  **Build Pass:** Executes the Starlark template logic to generate SQL.
+- **Parsing Strategy:** **Single-Pass System**.
+  1.  Extracts YAML frontmatter → config (name, materialized, owner, etc.).
+  2.  Renders Starlark template → pure SQL.
+  3.  Parses SQL with lineage package → extracts table dependencies + column lineage.
+  4.  Builds DAG from extracted sources.
 
 ---
 
@@ -25,7 +27,8 @@
     - unique: [order_id]
 ---*/
 
-SELECT * FROM {{ ref("orders") }}
+SELECT * FROM orders
+WHERE created_at > '2024-01-01'
 ```
 
 ---
@@ -35,7 +38,7 @@ SELECT * FROM {{ ref("orders") }}
 We use a **Split Syntax** to separate output from logic, embedding the Starlark (Python dialect) runtime.
 
 - **`{{ ... }}` (Expressions):** Evaluates a Starlark expression and injects the string result.
-  - _Example:_ `{{ ref("users") }}`, `{{ utils.clean_str(col) }}`
+  - _Example:_ `{{ target.schema }}`, `{{ utils.clean_str(col) }}`
 - **`{* ... *}` (Statements):** Executes control flow or variable definition. No output.
   - _Example:_ `{* for col in columns: *}`, `{* if is_prod: *}`
 
@@ -74,7 +77,9 @@ packages:
 
 Your Go binary injects these explicitly into the Starlark context:
 
-- **`ref(model_name)`**: Resolves table names based on environment.
 - **`config`**: Dictionary containing the parsed YAML Frontmatter.
 - **`env`**: String indicating current environment (e.g., "prod", "dev").
-- **`target`**: Object containing adapter specifics (e.g., `target.type == 'snowflake'`).
+- **`target`**: Object containing adapter specifics (e.g., `target.type`, `target.schema`).
+- **`this`**: Current model info (e.g., `this.name`, `this.schema`).
+
+**Note:** No `ref()` function - table dependencies are automatically extracted from SQL by the lineage parser.

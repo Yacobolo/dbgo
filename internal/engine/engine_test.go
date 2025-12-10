@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/user/dbgo/internal/parser"
-	"github.com/user/dbgo/internal/state"
+	"github.com/leapstack-labs/leapsql/internal/parser"
+	"github.com/leapstack-labs/leapsql/internal/state"
 )
 
 // testdataDir returns the path to the testdata directory.

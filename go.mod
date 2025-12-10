@@ -1,4 +1,4 @@
-module github.com/user/dbgo
+module github.com/leapstack-labs/leapsql
 
 go 1.24
 

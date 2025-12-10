@@ -5,7 +5,7 @@ version: "3"
 vars:
   MODELS_DIR: testdata/models
   SEEDS_DIR: testdata/seeds
-  STATE_FILE: .dbgo/state.db
+  STATE_FILE: .leapsql/state.db
   DATABASE: ""
 
 tasks:
@@ -16,9 +16,9 @@ tasks:
     silent: true
 
   build:
-    desc: Build the dbgo CLI
+    desc: Build the leapsql CLI
     cmds:
-      - go build -o dbgo ./cmd/dbgo
+      - go build -o leapsql ./cmd/leapsql
 
   test:
     desc: Run all tests
@@ -34,13 +34,13 @@ tasks:
     desc: Run all models
     deps: [build]
     cmds:
-      - ./dbgo run -models {{.MODELS_DIR}} -seeds {{.SEEDS_DIR}} -state {{.STATE_FILE}} {{if .DATABASE}}-database {{.DATABASE}}{{end}} -v
+      - ./leapsql run -models {{.MODELS_DIR}} -seeds {{.SEEDS_DIR}} -state {{.STATE_FILE}} {{if .DATABASE}}-database {{.DATABASE}}{{end}} -v
 
   run:select:
     desc: Run selected models (use MODEL=staging.stg_customers)
     deps: [build]
     cmds:
-      - ./dbgo run -models {{.MODELS_DIR}} -seeds {{.SEEDS_DIR}} -state {{.STATE_FILE}} {{if .DATABASE}}-database {{.DATABASE}}{{end}} -select {{.MODEL}} -v
+      - ./leapsql run -models {{.MODELS_DIR}} -seeds {{.SEEDS_DIR}} -state {{.STATE_FILE}} {{if .DATABASE}}-database {{.DATABASE}}{{end}} -select {{.MODEL}} -v
     requires:
       vars: [MODEL]
 
@@ -48,7 +48,7 @@ tasks:
     desc: Run selected models with downstream (use MODEL=staging.stg_customers)
     deps: [build]
     cmds:
-      - ./dbgo run -models {{.MODELS_DIR}} -seeds {{.SEEDS_DIR}} -state {{.STATE_FILE}} {{if .DATABASE}}-database {{.DATABASE}}{{end}} -select {{.MODEL}} -downstream -v
+      - ./leapsql run -models {{.MODELS_DIR}} -seeds {{.SEEDS_DIR}} -state {{.STATE_FILE}} {{if .DATABASE}}-database {{.DATABASE}}{{end}} -select {{.MODEL}} -downstream -v
     requires:
       vars: [MODEL]
 
@@ -56,44 +56,44 @@ tasks:
     desc: List all models and dependencies
     deps: [build]
     cmds:
-      - ./dbgo list -models {{.MODELS_DIR}} -seeds {{.SEEDS_DIR}} -state {{.STATE_FILE}}
+      - ./leapsql list -models {{.MODELS_DIR}} -seeds {{.SEEDS_DIR}} -state {{.STATE_FILE}}
 
   dag:
     desc: Show dependency graph
     deps: [build]
     cmds:
-      - ./dbgo dag -models {{.MODELS_DIR}} -seeds {{.SEEDS_DIR}} -state {{.STATE_FILE}}
+      - ./leapsql dag -models {{.MODELS_DIR}} -seeds {{.SEEDS_DIR}} -state {{.STATE_FILE}}
 
   seed:
     desc: Load seed data
     deps: [build]
     cmds:
-      - ./dbgo seed -models {{.MODELS_DIR}} -seeds {{.SEEDS_DIR}} -state {{.STATE_FILE}} {{if .DATABASE}}-database {{.DATABASE}}{{end}}
+      - ./leapsql seed -models {{.MODELS_DIR}} -seeds {{.SEEDS_DIR}} -state {{.STATE_FILE}} {{if .DATABASE}}-database {{.DATABASE}}{{end}}
 
   version:
     desc: Show version
     deps: [build]
     cmds:
-      - ./dbgo version
+      - ./leapsql version
 
   docs:build:
     desc: Generate static documentation site
     deps: [build]
     cmds:
-      - ./dbgo docs build -models {{.MODELS_DIR}} -output docs-site -project "DBGo Project"
+      - ./leapsql docs build -models {{.MODELS_DIR}} -output docs-site -project "LeapSQL Project"
 
   docs:serve:
     desc: Build and serve documentation locally
     deps: [build]
     cmds:
-      - ./dbgo docs serve -models {{.MODELS_DIR}} -port 8080 -project "DBGo Project"
+      - ./leapsql docs serve -models {{.MODELS_DIR}} -port 8080 -project "LeapSQL Project"
 
   clean:
     desc: Clean build artifacts and state
     cmds:
-      - rm -f dbgo
-      - rm -rf .dbgo
-      - rm -rf .dbgo-docs
+      - rm -f leapsql
+      - rm -rf .leapsql
+      - rm -rf .leapsql-docs
       - rm -rf docs-site
 
   context:sqlglot:

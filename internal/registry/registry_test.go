@@ -3,7 +3,7 @@ package registry
 import (
 	"testing"
 
-	"github.com/user/dbgo/internal/parser"
+	"github.com/leapstack-labs/leapsql/internal/parser"
 )
 
 func TestModelRegistry_Register(t *testing.T) {

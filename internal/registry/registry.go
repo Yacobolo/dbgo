@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/user/dbgo/internal/parser"
+	"github.com/leapstack-labs/leapsql/internal/parser"
 )
 
 // ModelRegistry maps table names to model paths for dependency resolution.

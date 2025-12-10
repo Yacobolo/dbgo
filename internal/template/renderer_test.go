@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	starctx "github.com/user/dbgo/internal/starlark"
+	starctx "github.com/leapstack-labs/leapsql/internal/starlark"
 	"go.starlark.net/starlark"
 )
 

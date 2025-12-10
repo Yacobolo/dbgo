@@ -14,8 +14,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/user/dbgo/internal/parser"
-	"github.com/user/dbgo/internal/registry"
+	"github.com/leapstack-labs/leapsql/internal/parser"
+	"github.com/leapstack-labs/leapsql/internal/registry"
 )
 
 //go:embed static/*

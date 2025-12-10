@@ -1,9 +1,9 @@
 *plan.md
 docs-site/
-.dbgo-docs/
+.leapsql-docs/
 
 # Binaries
-*.dbgo
+/leapsql
 *.exe
 *.exe~
 *.dll
@@ -29,8 +29,8 @@ go.work
 .DS_Store
 Thumbs.db
 
-# DBGo state and data
-.dbgo/
+# LeapSQL state and data
+.leapsql/
 *.duckdb
 *.duckdb.wal
 

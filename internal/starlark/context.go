@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/user/dbgo/internal/macro"
+	"github.com/leapstack-labs/leapsql/internal/macro"
 	"go.starlark.net/starlark"
 )
 

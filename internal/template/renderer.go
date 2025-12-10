@@ -3,7 +3,7 @@ package template
 import (
 	"strings"
 
-	starctx "github.com/user/dbgo/internal/starlark"
+	starctx "github.com/leapstack-labs/leapsql/internal/starlark"
 	"go.starlark.net/starlark"
 )
 

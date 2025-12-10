@@ -1,4 +1,4 @@
--- DBGo State Management Schema
+-- LeapSQL State Management Schema
 -- This schema tracks pipeline runs, models, execution history, and dependencies.
 
 -- runs: execution sessions

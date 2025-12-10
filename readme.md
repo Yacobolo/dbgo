@@ -1,10 +1,10 @@
-# Project Overview: DBGo (Working Title)
+# Project Overview: LeapSQL
 
 **The Compiled, Database-State Data Transformation Engine**
 
 ### 1\. The Core Philosophy
 
-**DBGo** is a modern data transformation tool written in **Go**. Unlike existing tools that rely on runtime interpretation (Python/Jinja) and file-based state (JSON artifacts), DBGo treats data models as **compiled software** and manages state in a **live database**.
+**LeapSQL** is a modern data transformation tool written in **Go**. Unlike existing tools that rely on runtime interpretation (Python/Jinja) and file-based state (JSON artifacts), LeapSQL treats data models as **compiled software** and manages state in a **live database**.
 
 **The Goal:** To provide the developer experience of a modern compiler (instant feedback, type safety, single binary) with the deployment power of a database-backed state engine (virtual environments, zero-copy staging).
 
@@ -14,7 +14,7 @@
 
 #### A. State Management: Database \> Files
 
-Instead of generating a static `manifest.json`, DBGo stores the entire project graph and execution history in a backend database (Postgres or embedded SQLite).
+Instead of generating a static `manifest.json`, LeapSQL stores the entire project graph and execution history in a backend database (Postgres or embedded SQLite).
 
   * **Virtual Environments:** "Staging" is just a metadata pointer to a specific commit hash in the DB. We can create ephemeral environments in milliseconds without copying data.
   * **Concurrency Control:** The DB acts as a mutex. Two CI jobs cannot overwrite the same table simultaneously.
@@ -91,16 +91,16 @@ type Adapter interface {
 
 Similar to modern frontend tools (Vite/Tailwind):
 
-1.  User runs `dbgo dev`.
+1.  User runs `leapsql dev`.
 2.  User saves a `.sql` file.
-3.  `dbgo` detects change $\to$ Generates Go Code $\to$ Recompiles Memory Binary $\to$ Runs Model.
+3.  `leapsql` detects change $\to$ Generates Go Code $\to$ Recompiles Memory Binary $\to$ Runs Model.
 4.  Total loop time: \< 500ms.
 
 -----
 
 ### 5\. Competitive Comparison
 
-| Feature | dbt Core | DBGo (This Project) |
+| Feature | dbt Core | LeapSQL (This Project) |
 | :--- | :--- | :--- |
 | **Language** | Python | Go (Golang) |
 | **Parsing Strategy** | Runtime Regex (Slow) | Compile-time Headers (Instant) |

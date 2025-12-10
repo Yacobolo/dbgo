@@ -1,4 +1,4 @@
-// Package main provides the CLI for DBGo data transformation engine.
+// Package main provides the CLI for LeapSQL data transformation engine.
 package main
 
 import (
@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/user/dbgo/internal/docs"
-	"github.com/user/dbgo/internal/engine"
+	"github.com/leapstack-labs/leapsql/internal/docs"
+	"github.com/leapstack-labs/leapsql/internal/engine"
 )
 
 const (
 	defaultModelsDir = "models"
 	defaultSeedsDir  = "seeds"
 	defaultMacrosDir = "macros"
-	defaultStateFile = ".dbgo/state.db"
+	defaultStateFile = ".leapsql/state.db"
 )
 
 // Command represents a CLI command.
@@ -105,9 +105,9 @@ func main() {
 }
 
 func printUsage(commands map[string]*Command) {
-	fmt.Println("DBGo - Data Transformation Engine")
+	fmt.Println("LeapSQL - Data Transformation Engine")
 	fmt.Println()
-	fmt.Println("Usage: dbgo <command> [options]")
+	fmt.Println("Usage: leapsql <command> [options]")
 	fmt.Println()
 	fmt.Println("Commands:")
 	for _, cmd := range []string{"run", "build", "list", "seed", "dag", "docs", "version"} {
@@ -116,7 +116,7 @@ func printUsage(commands map[string]*Command) {
 		}
 	}
 	fmt.Println()
-	fmt.Println("Run 'dbgo <command> -h' for help on a specific command.")
+	fmt.Println("Run 'leapsql <command> -h' for help on a specific command.")
 }
 
 func setupFlags(fs *flag.FlagSet) {
@@ -348,7 +348,7 @@ func dagCmd(args []string) error {
 
 // versionCmd shows version information.
 func versionCmd(args []string) error {
-	fmt.Println("DBGo v0.1.0")
+	fmt.Println("LeapSQL v0.1.0")
 	fmt.Println("Data Transformation Engine built with Go and DuckDB")
 	return nil
 }
@@ -356,7 +356,7 @@ func versionCmd(args []string) error {
 // docsCmd handles the docs subcommands.
 func docsCmd(args []string) error {
 	if len(args) < 1 {
-		fmt.Println("Usage: dbgo docs <build|serve> [options]")
+		fmt.Println("Usage: leapsql docs <build|serve> [options]")
 		fmt.Println()
 		fmt.Println("Subcommands:")
 		fmt.Println("  build    Generate static documentation site")
@@ -379,10 +379,10 @@ func docsBuildCmd(args []string) error {
 	fs := flag.NewFlagSet("docs build", flag.ExitOnError)
 	modelsPath := fs.String("models", modelsDir, "Path to models directory")
 	outputPath := fs.String("output", "./docs-site", "Output directory for generated site")
-	projectName := fs.String("project", "DBGo Project", "Project name for documentation")
+	projectName := fs.String("project", "LeapSQL Project", "Project name for documentation")
 
 	fs.Usage = func() {
-		fmt.Println("Usage: dbgo docs build [options]")
+		fmt.Println("Usage: leapsql docs build [options]")
 		fmt.Println()
 		fmt.Println("Options:")
 		fs.PrintDefaults()
@@ -423,12 +423,12 @@ func docsBuildCmd(args []string) error {
 func docsServeCmd(args []string) error {
 	fs := flag.NewFlagSet("docs serve", flag.ExitOnError)
 	modelsPath := fs.String("models", modelsDir, "Path to models directory")
-	outputPath := fs.String("output", "./.dbgo-docs", "Output directory for generated site")
-	projectName := fs.String("project", "DBGo Project", "Project name for documentation")
+	outputPath := fs.String("output", "./.leapsql-docs", "Output directory for generated site")
+	projectName := fs.String("project", "LeapSQL Project", "Project name for documentation")
 	port := fs.Int("port", 8080, "Port to serve on")
 
 	fs.Usage = func() {
-		fmt.Println("Usage: dbgo docs serve [options]")
+		fmt.Println("Usage: leapsql docs serve [options]")
 		fmt.Println()
 		fmt.Println("Options:")
 		fs.PrintDefaults()

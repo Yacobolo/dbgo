@@ -12,14 +12,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/user/dbgo/internal/adapter"
-	"github.com/user/dbgo/internal/dag"
-	"github.com/user/dbgo/internal/macro"
-	"github.com/user/dbgo/internal/parser"
-	"github.com/user/dbgo/internal/registry"
-	starctx "github.com/user/dbgo/internal/starlark"
-	"github.com/user/dbgo/internal/state"
-	"github.com/user/dbgo/internal/template"
+	"github.com/leapstack-labs/leapsql/internal/adapter"
+	"github.com/leapstack-labs/leapsql/internal/dag"
+	"github.com/leapstack-labs/leapsql/internal/macro"
+	"github.com/leapstack-labs/leapsql/internal/parser"
+	"github.com/leapstack-labs/leapsql/internal/registry"
+	starctx "github.com/leapstack-labs/leapsql/internal/starlark"
+	"github.com/leapstack-labs/leapsql/internal/state"
+	"github.com/leapstack-labs/leapsql/internal/template"
 )
 
 // Engine orchestrates the execution of SQL models.

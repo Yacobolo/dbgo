@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/user/dbgo/internal/dag"
+	"github.com/leapstack-labs/leapsql/internal/dag"
 )
 
 // TestIntegration_ScanTestDataset tests the parser with the actual test dataset.

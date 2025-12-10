@@ -1,4 +1,4 @@
-// DBGo Docs - Static Documentation Site
+// LeapSQL Docs - Static Documentation Site
 // Vanilla JS with hash-based routing
 
 // Global state
@@ -106,7 +106,7 @@ function renderSidebar() {
   return `
     <aside class="sidebar">
       <div class="sidebar-header">
-        <h1>${CATALOG.project_name || 'DBGo'}</h1>
+        <h1>${CATALOG.project_name || 'LeapSQL'}</h1>
         <div class="subtitle">Documentation</div>
       </div>
       
@@ -158,7 +158,7 @@ function groupModelsByFolder(models) {
 // Get collapsed state from localStorage
 function getCollapsedState() {
   try {
-    const stored = localStorage.getItem('dbgo-nav-collapsed');
+    const stored = localStorage.getItem('leapsql-nav-collapsed');
     return stored ? JSON.parse(stored) : {};
   } catch (e) {
     return {};
@@ -168,7 +168,7 @@ function getCollapsedState() {
 // Save collapsed state to localStorage
 function saveCollapsedState(state) {
   try {
-    localStorage.setItem('dbgo-nav-collapsed', JSON.stringify(state));
+    localStorage.setItem('leapsql-nav-collapsed', JSON.stringify(state));
   } catch (e) {
     // Ignore storage errors
   }
